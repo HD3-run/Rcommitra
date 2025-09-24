@@ -1,8 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { Route, Switch } from 'wouter';
-import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { WebSocketProvider } from './context/WebSocketContext';
+import { ThemeProvider } from './context/ThemeContext';
 import Sidebar from './components/Sidebar';
 
 const Dashboard = lazy(() => import('./pages/Dashboard'));
@@ -31,11 +31,11 @@ function AppContent() {
           <Route path="/" component={user ? (user.role === 'admin' ? Dashboard : EmployeeDashboard) : Landing} />
           
           {/* Protected routes with sidebar layout */}
-          <Route>
+          <Route path="/:rest*">
             {user ? (
-              <div className="flex">
+              <div className="flex h-screen overflow-hidden">
                 <Sidebar />
-                <div className="flex-grow">
+                <div className="flex-grow overflow-auto bg-gray-100 dark:bg-gray-900">
                   <Switch>
                     {user?.role === 'admin' ? (
                       // Admin routes
@@ -47,17 +47,13 @@ function AppContent() {
                         <Route path="/reports" component={Reports} />
                         <Route path="/suppliers" component={Suppliers} />
                         <Route path="/settings" component={Settings} />
-                        <Route component={Dashboard} />
                       </>
                     ) : (
                       // Employee routes
                       <>
-                        <Route path="/employee-dashboard" component={EmployeeDashboard} />
-                        <Route path="/employee-orders" component={EmployeeOrders} />
-                        <Route path="/employee-inventory" component={EmployeeInventory} />
+                        <Route path="/orders" component={EmployeeOrders} />
+                        <Route path="/inventory" component={EmployeeInventory} />
                         <Route path="/settings" component={Settings} />
-                        <Route path="/dashboard" component={EmployeeDashboard} />
-                        <Route component={EmployeeDashboard} />
                       </>
                     )}
                   </Switch>
@@ -75,9 +71,11 @@ function AppContent() {
 
 function App() {
   return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </ThemeProvider>
   );
 }
 

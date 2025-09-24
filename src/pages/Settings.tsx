@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 
 export default function Settings() {
   const { user } = useAuth();
+  useTheme();
   const userRole = user?.role;
   const [profile, setProfile] = useState({
     name: '',
@@ -220,14 +222,14 @@ export default function Settings() {
   };
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+    <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-light-pink dark:bg-gray-900 text-gray-900 dark:text-white">
       <h1 className="text-2xl sm:text-3xl font-bold mb-6">{userRole === 'admin' ? 'Merchant Profile / Settings' : 'User Profile / Settings'}</h1>
 
       {message && <div className="bg-blue-100 text-blue-800 p-3 rounded-md mb-4">{message}</div>}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 sm:gap-8">
         {/* Profile Settings */}
-        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
           <h2 className="text-lg sm:text-xl font-semibold mb-4">Edit Profile</h2>
           <form onSubmit={handleProfileSubmit} className="space-y-4">
             <div>
@@ -274,7 +276,7 @@ export default function Settings() {
         </div>
 
         {/* Change Password */}
-        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
           <h2 className="text-lg sm:text-xl font-semibold mb-4">Change Password</h2>
           <form onSubmit={handleChangePassword} className="space-y-4">
             <div>
@@ -319,7 +321,7 @@ export default function Settings() {
 
         {/* User Management (Admin only) */}
         {userRole === 'admin' && (
-          <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md col-span-full">
+          <div className="bg-light-pink-100 dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md col-span-full">
             <h2 className="text-lg sm:text-xl font-semibold mb-4">User Management</h2>
             <p className="text-gray-700 dark:text-gray-300 mb-4">Manage employees like pickup staff, managers, and other team members.</p>
             
@@ -425,7 +427,7 @@ export default function Settings() {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody className="bg-light-pink-100 dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {users.map((user: any) => (
                     <tr key={user.user_id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{user.username}</td>

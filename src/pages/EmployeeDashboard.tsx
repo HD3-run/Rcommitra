@@ -13,22 +13,15 @@ interface AssignedOrder {
   delivery_notes?: string;
 }
 
-interface Order {
-  id: string;
-  orderId: string;
-  customerName: string;
-  channel: string;
-  type: string;
-  customer: string;
-  status: string;
-  amount: number;
-  date: string;
-}
+ 
 
 export default function EmployeeDashboard() {
   const { user } = useAuth();
   const [assignedOrders, setAssignedOrders] = useState<AssignedOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [showDebug] = useState(process.env.NODE_ENV === 'development');
   const [stats, setStats] = useState({
     totalAssigned: 0,
     completed: 0,
@@ -38,44 +31,74 @@ export default function EmployeeDashboard() {
 
   useEffect(() => {
     loadAssignedOrders();
+    if (showDebug) {
+      loadDebugInfo();
+    }
   }, []);
+
+  const loadDebugInfo = async () => {
+    try {
+      const response = await fetch('/api/orders/debug', {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        setDebugInfo(data);
+      }
+    } catch (error) {
+      console.error('Debug info load failed:', error);
+    }
+  };
 
   const loadAssignedOrders = async () => {
     try {
+      setError(null);
       console.log('Loading assigned orders for employee dashboard');
+      
       const response = await fetch('/api/orders', {
         credentials: 'include'
       });
-      console.log('Employee dashboard API response:', response.status);
       
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Employee dashboard data:', data);
-        
-        if (data.orders && Array.isArray(data.orders)) {
-          const formattedOrders = data.orders.map((order: any) => ({
-            order_id: order.order_id.toString(),
-            order_number: `ORD${order.order_id}`,
-            customer_name: order.customer_name || 'Unknown',
-            customer_phone: order.customer_phone || 'N/A',
-            delivery_address: order.customer_address || 'N/A',
-            total_amount: parseFloat(order.total_amount) || 0,
-            status: order.status || 'pending',
-            assigned_at: order.created_at || new Date().toISOString()
-          }));
-          setAssignedOrders(formattedOrders);
-          calculateStats(formattedOrders);
-        } else {
-          setAssignedOrders([]);
-          calculateStats([]);
-        }
+      console.log('Employee dashboard API response:', {
+        status: response.status,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('API Error:', response.status, errorData);
+        setError(`API Error: ${response.status} - ${errorData}`);
+        throw new Error(`API Error: ${response.status} - ${errorData}`);
+      }
+      
+      const data = await response.json();
+      console.log('Employee dashboard data:', data);
+      
+      if (data.orders && Array.isArray(data.orders)) {
+        const formattedOrders = data.orders.map((order: any) => ({
+          order_id: order.order_id.toString(),
+          order_number: `ORD${order.order_id}`,
+          customer_name: order.customer_name || 'Unknown',
+          customer_phone: order.customer_phone || 'N/A',
+          delivery_address: order.customer_address || order.customer_email || 'N/A',
+          total_amount: parseFloat(order.total_amount) || 0,
+          status: order.status || 'pending',
+          assigned_at: order.created_at || new Date().toISOString()
+        }));
+        setAssignedOrders(formattedOrders);
+        calculateStats(formattedOrders);
       } else {
-        console.error('Failed to load orders:', response.status);
+        console.warn('No orders array in response:', data);
         setAssignedOrders([]);
         calculateStats([]);
+        if (data.debug) {
+          console.log('Debug info from API:', data.debug);
+        }
       }
     } catch (error) {
       console.error('Failed to load assigned orders:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load orders');
       setAssignedOrders([]);
       calculateStats([]);
     } finally {
@@ -113,11 +136,54 @@ export default function EmployeeDashboard() {
   };
 
   if (loading) {
-    return <div className="p-8">Loading...</div>;
+    return (
+      <div className="p-8 flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading your assigned orders...</p>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
+      {/* Debug Panel for Development */}
+      {showDebug && debugInfo && (
+        <div className="bg-yellow-100 dark:bg-yellow-900 p-4 rounded-lg mb-6">
+          <div className="flex justify-between items-center mb-2">
+            <h3 className="font-bold">Debug Information</h3>
+            <button 
+              onClick={loadDebugInfo}
+              className="px-3 py-1 bg-blue-500 text-white rounded text-sm hover:bg-blue-600"
+            >
+              Refresh Debug Info
+            </button>
+          </div>
+          <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded overflow-auto max-h-40">
+            {JSON.stringify(debugInfo, null, 2)}
+          </pre>
+        </div>
+      )}
+      
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <strong className="font-bold">Error Loading Orders:</strong>
+              <span className="block sm:inline ml-2">{error}</span>
+            </div>
+            <button 
+              onClick={() => { setError(null); loadAssignedOrders(); }}
+              className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+      
       <div className="mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold">Welcome, {user?.username}</h1>
         <p className="text-gray-600 dark:text-gray-400">Role: {user?.role}</p>
@@ -150,8 +216,34 @@ export default function EmployeeDashboard() {
         </div>
         
         {assignedOrders.length === 0 ? (
-          <div className="p-6 text-center text-gray-500 dark:text-gray-400">
-            No orders assigned to you yet.
+          <div className="p-8 text-center">
+            <div className="text-gray-500 dark:text-gray-400 mb-4">
+              <svg className="mx-auto h-12 w-12 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+              </svg>
+              <h3 className="text-lg font-medium mb-2">No Orders Assigned</h3>
+              <p className="text-sm mb-4">
+                {error ? 'There was an error loading your orders.' : 'No orders have been assigned to you yet.'}
+              </p>
+              <button 
+                onClick={loadAssignedOrders}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded transition-colors"
+              >
+                Refresh Orders
+              </button>
+            </div>
+            
+            {/* Additional debug info for development */}
+            {showDebug && (
+              <div className="mt-4 text-left bg-gray-100 dark:bg-gray-800 p-4 rounded">
+                <h4 className="font-bold mb-2">Troubleshooting:</h4>
+                <ul className="text-sm space-y-1 text-gray-600 dark:text-gray-400">
+                  <li>• Check if you are logged in as the correct user</li>
+                  <li>• Verify that orders have been assigned to your account</li>
+                  <li>• Contact your administrator if the problem persists</li>
+                </ul>
+              </div>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

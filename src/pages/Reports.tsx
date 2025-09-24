@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
+ 
 import { formatCurrency } from '../utils/currency';
+import DownloadDropdown from '../components/DownloadDropdown';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -17,6 +19,7 @@ export default function Reports() {
   const [endDate, setEndDate] = useState('');
   const [data, setData] = useState<ReportData[]>([]);
   const [loading, setLoading] = useState(true);
+  
 
   // Fetch real data from database
   const fetchData = async () => {
@@ -108,7 +111,7 @@ export default function Reports() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen">
+    <div className="p-4 sm:p-6 lg:p-8 bg-light-pink dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen">
       <h1 className="text-2xl sm:text-3xl font-bold mb-6">Sales Reports</h1>
 
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
@@ -122,26 +125,11 @@ export default function Reports() {
             <option value="monthly">Monthly Sales</option>
             <option value="yearly">Yearly Sales</option>
           </select>
-          <div className="flex space-x-2">
-            <button
-              onClick={handleDownloadCSV}
-              className="p-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors"
-            >
-              CSV
-            </button>
-            <button
-              onClick={handleDownloadExcel}
-              className="p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors"
-            >
-              Excel
-            </button>
-            <button
-              onClick={handleDownloadPDF}
-              className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors"
-            >
-              PDF
-            </button>
-          </div>
+          <DownloadDropdown
+            onDownloadCSV={handleDownloadCSV}
+            onDownloadExcel={handleDownloadExcel}
+            onDownloadPDF={handleDownloadPDF}
+          />
         </div>
 
         {(reportType === 'daily' || reportType === 'monthly') && (
@@ -162,7 +150,7 @@ export default function Reports() {
         )}
       </div>
 
-      <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
+      <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow mb-6">
         <h2 className="text-lg font-semibold mb-4">Sales and Revenue Overview</h2>
         {loading ? (
           <div className="flex justify-center items-center h-64">
@@ -196,19 +184,19 @@ export default function Reports() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow">
           <h2 className="text-lg font-semibold mb-4">Total Sales</h2>
           <p className="text-3xl font-bold text-blue-600 dark:text-blue-400">
             {loading ? '...' : data.reduce((sum, item) => sum + item.sales, 0)}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow">
           <h2 className="text-lg font-semibold mb-4">Total Revenue</h2>
           <p className="text-3xl font-bold text-green-600 dark:text-green-400">
             {loading ? '...' : formatCurrency(data.reduce((sum, item) => sum + item.revenue, 0))}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow">
           <h2 className="text-lg font-semibold mb-4">Average Sales per Period</h2>
           <p className="text-3xl font-bold text-purple-600 dark:text-purple-400">
             {loading ? '...' : data.length > 0 ? (data.reduce((sum, item) => sum + item.sales, 0) / data.length).toFixed(2) : '0'}

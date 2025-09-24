@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Moon, Sun } from 'lucide-react';
 import { formatCurrency } from '../utils/currency';
+import { useTheme } from '../context/ThemeContext';
 
 interface ChartData {
   name: string;
@@ -19,7 +19,7 @@ interface DashboardMetrics {
   totalRevenue: number;
 }
 
-export default function Dashboard() {
+const Dashboard = memo(function Dashboard() {
   const [chartData, setChartData] = useState<ChartData[]>([]);
   const [metrics, setMetrics] = useState<DashboardMetrics>({
     todayOrders: 0,
@@ -30,14 +30,10 @@ export default function Dashboard() {
     totalRevenue: 0
   });
   const [loading, setLoading] = useState(true);
-  const [isDarkMode, setIsDarkMode] = useState(false);
-  const [selectedChannel, setSelectedChannel] = useState('All');
+  const [selectedChannel] = useState('All');
+  const { isDarkMode } = useTheme();
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       // Load monthly chart data
       const reportsResponse = await fetch('/api/reports?type=monthly', {
@@ -101,15 +97,13 @@ export default function Dashboard() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-  }, [isDarkMode]);
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+
 
   const filteredData = useMemo(() => {
     return selectedChannel === 'All'
@@ -118,38 +112,32 @@ export default function Dashboard() {
   }, [selectedChannel, chartData]);
 
   return (
-    <div className={`p-4 sm:p-6 md:p-8 min-h-screen ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-900'}`}>
+    <div className={`p-4 sm:p-6 md:p-8 min-h-screen ${isDarkMode ? 'bg-gray-900 text-white' : 'bg-light-pink text-gray-900'}`}>
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 sm:mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-0">Dashboard</h1>
-        <button
-          onClick={() => setIsDarkMode(!isDarkMode)}
-          className="p-2 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white shadow-md"
-        >
-          {isDarkMode ? <Sun size={24} /> : <Moon size={24} />}
-        </button>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 sm:mb-0 text-gray-900 dark:text-white">Dashboard</h1>
       </div>
 
       {/* Dashboard Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Today's Orders</h3>
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
             {loading ? '...' : metrics.todayOrders}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Today's Revenue</h3>
           <p className="text-2xl font-bold text-green-600 dark:text-green-400">
             {loading ? '...' : formatCurrency(metrics.todayRevenue)}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Orders</h3>
           <p className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
             {loading ? '...' : metrics.pendingOrders}
           </p>
         </div>
-        <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-6 rounded-lg shadow-md">
           <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Low Stock Items</h3>
           <p className="text-2xl font-bold text-red-600 dark:text-red-400">
             {loading ? '...' : metrics.lowStockProducts}
@@ -158,7 +146,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 gap-6 sm:gap-8">
-        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
           <h2 className="text-lg sm:text-xl font-semibold mb-4">Monthly Sales Performance</h2>
           {loading ? (
             <div className="flex justify-center items-center h-64">
@@ -185,7 +173,7 @@ export default function Dashboard() {
           )}
         </div>
 
-        <div className="bg-white dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
+        <div className="bg-light-pink-100 dark:bg-gray-800 p-4 sm:p-6 rounded-lg shadow-md">
           <h2 className="text-lg sm:text-xl font-semibold mb-4">Monthly Revenue Breakdown</h2>
           {loading ? (
             <div className="flex justify-center items-center h-64">
@@ -215,4 +203,6 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
+});
+
+export default Dashboard;

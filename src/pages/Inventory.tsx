@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import FileUpload from '../components/FileUpload';
+import DownloadDropdown from '../components/DownloadDropdown';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import { formatCurrency } from '../utils/currency';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -38,6 +40,7 @@ const Inventory = () => {
     const [editingPrice, setEditingPrice] = useState<EditingPrice | null>(null);
     
     const { user } = useAuth();
+    useTheme();
     const userRole = user?.role || 'admin';
 
     useEffect(() => {
@@ -244,20 +247,20 @@ const Inventory = () => {
     }
 
     return (
-        <div className="p-6 bg-gray-100 dark:bg-gray-900 min-h-screen">
+        <div className="p-6 bg-light-pink dark:bg-gray-900 min-h-screen">
             <h1 className="text-3xl font-bold text-gray-800 dark:text-white mb-6">Inventory</h1>
 
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md">
+                <div className="bg-light-pink-100 dark:bg-gray-800 p-5 rounded-lg shadow-md">
                     <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-3">Total Products</h2>
                     <p className="text-4xl font-bold text-indigo-600">{products.length}</p>
                 </div>
-                <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md">
+                <div className="bg-light-pink-100 dark:bg-gray-800 p-5 rounded-lg shadow-md">
                     <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-3">Total Stock</h2>
                     <p className="text-4xl font-bold text-green-600">{totalStock}</p>
                 </div>
-                <div className="bg-white dark:bg-gray-800 p-5 rounded-lg shadow-md">
+                <div className="bg-light-pink-100 dark:bg-gray-800 p-5 rounded-lg shadow-md">
                     <h2 className="text-xl font-semibold text-gray-700 dark:text-gray-300 mb-3">Low Stock Items</h2>
                     <p className="text-4xl font-bold text-red-600">{lowStockCount}</p>
                 </div>
@@ -288,26 +291,11 @@ const Inventory = () => {
                         >
                             Add Product Manually
                         </button>
-                        <div className="space-y-2">
-                            <button
-                                onClick={handleDownloadCSV}
-                                className="p-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors w-full"
-                            >
-                                Download CSV
-                            </button>
-                            <button
-                                onClick={handleDownloadExcel}
-                                className="p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors w-full"
-                            >
-                                Download Excel
-                            </button>
-                            <button
-                                onClick={handleDownloadPDF}
-                                className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors w-full"
-                            >
-                                Download PDF
-                            </button>
-                        </div>
+                        <DownloadDropdown
+                            onDownloadCSV={handleDownloadCSV}
+                            onDownloadExcel={handleDownloadExcel}
+                            onDownloadPDF={handleDownloadPDF}
+                        />
                     </div>
                 </div>
             )}
@@ -334,7 +322,7 @@ const Inventory = () => {
             </div>
 
             {/* Products Table */}
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
+            <div className="bg-light-pink-100 dark:bg-gray-800 rounded-lg shadow-md overflow-hidden">
                 <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                         <thead className="bg-gray-50 dark:bg-gray-700">
@@ -348,7 +336,7 @@ const Inventory = () => {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                             </tr>
                         </thead>
-                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                        <tbody className="bg-light-pink-100 dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                             {filteredProducts.length === 0 ? (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">

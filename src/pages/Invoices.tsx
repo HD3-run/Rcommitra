@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import FileUpload from '../components/FileUpload';
+import DownloadDropdown from '../components/DownloadDropdown';
 import { formatCurrency } from '../utils/currency';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -29,6 +31,7 @@ export default function Invoices() {
   });
   
   const { user } = useAuth();
+  const { } = useTheme();
   const userRole = user?.role || 'admin';
 
   useEffect(() => {
@@ -192,7 +195,7 @@ export default function Invoices() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen">
+    <div className="p-4 sm:p-6 lg:p-8 bg-light-pink dark:bg-gray-900 text-gray-900 dark:text-white min-h-screen">
       <h1 className="text-2xl sm:text-3xl font-bold mb-6">Invoice Management</h1>
 
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0">
@@ -238,31 +241,16 @@ export default function Invoices() {
               Create Invoice Manually
             </button>
             
-            <div className="space-y-2">
-              <button
-                onClick={handleDownloadCSV}
-                className="p-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors w-full"
-              >
-                Download CSV
-              </button>
-              <button
-                onClick={handleDownloadExcel}
-                className="p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors w-full"
-              >
-                Download Excel
-              </button>
-              <button
-                onClick={handleDownloadPDF}
-                className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors w-full"
-              >
-                Download PDF
-              </button>
-            </div>
+            <DownloadDropdown
+              onDownloadCSV={handleDownloadCSV}
+              onDownloadExcel={handleDownloadExcel}
+              onDownloadPDF={handleDownloadPDF}
+            />
           </div>
         </div>
       )}
 
-      <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow mb-6">
+      <div className="overflow-x-auto bg-light-pink-100 dark:bg-gray-800 rounded-lg shadow mb-6">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
@@ -275,7 +263,7 @@ export default function Invoices() {
               <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created</th>
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-light-pink-100 dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {filteredInvoices.length === 0 ? (
               <tr>
                 <td colSpan={7} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">

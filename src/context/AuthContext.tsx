@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from 'react
 
 interface AuthContextType {
   user: { username: string; role: string } | null;
-  login: (username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<{ username: string; role: string }>;
   signup: (username: string, email: string, password: string) => Promise<void>;
   logout: () => void;
 }

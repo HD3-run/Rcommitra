@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
 import { formatCurrency } from '../utils/currency';
 
 interface Product {
@@ -16,11 +15,10 @@ interface Product {
 export default function EmployeeInventory() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [categories, setCategories] = useState<string[]>([]);
-
-  const { user } = useAuth();
 
   useEffect(() => {
     loadInventory();
@@ -28,22 +26,49 @@ export default function EmployeeInventory() {
 
   const loadInventory = async () => {
     try {
+      setError(null);
+      console.log('Loading inventory for employee inventory page');
+      
       const response = await fetch('/api/inventory', {
         credentials: 'include'
       });
       
-      if (response.ok) {
-        const data = await response.json();
-        if (data.products && Array.isArray(data.products)) {
-          setProducts(data.products);
-          
-          // Extract unique categories
-          const uniqueCategories = [...new Set(data.products.map((p: Product) => p.category).filter(Boolean))];
-          setCategories(uniqueCategories);
+      console.log('Employee inventory API response:', {
+        status: response.status,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries())
+      });
+      
+      if (!response.ok) {
+        const errorData = await response.text();
+        console.error('API Error in EmployeeInventory:', response.status, errorData);
+        setError(`Failed to load inventory: ${response.status} - ${errorData}`);
+        setProducts([]);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('Employee inventory data:', data);
+      
+      if (data.products && Array.isArray(data.products)) {
+        const productsData = data.products as Product[];
+        setProducts(productsData);
+        console.log('Loaded products for employee:', data.products.length);
+        
+        // Extract unique categories
+        const uniqueCategories = Array.from(new Set(productsData.map((p) => p.category).filter((c) => !!c)));
+        setCategories(uniqueCategories);
+      } else {
+        console.warn('No products array in employee inventory response:', data);
+        setProducts([]);
+        if (data.debug) {
+          console.log('Debug info from employee inventory API:', data.debug);
         }
       }
     } catch (error) {
-      console.error('Failed to load inventory:', error);
+      console.error('Failed to load employee inventory:', error);
+      setError(error instanceof Error ? error.message : 'Failed to load inventory');
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -67,7 +92,10 @@ export default function EmployeeInventory() {
       <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
         <h1 className="text-2xl sm:text-3xl font-bold mb-6">Inventory</h1>
         <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading inventory...</div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p className="text-lg text-gray-600 dark:text-gray-400">Loading inventory...</p>
+          </div>
         </div>
       </div>
     );
@@ -76,6 +104,24 @@ export default function EmployeeInventory() {
   return (
     <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
       <h1 className="text-2xl sm:text-3xl font-bold mb-6">Inventory</h1>
+      
+      {/* Error Display */}
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <strong className="font-bold">Error Loading Inventory:</strong>
+              <span className="block sm:inline ml-2">{error}</span>
+            </div>
+            <button 
+              onClick={() => { setError(null); loadInventory(); }}
+              className="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">

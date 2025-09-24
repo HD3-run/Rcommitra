@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency } from '../utils/currency';
+import { useTheme } from '../context/ThemeContext';
 
 interface Supplier {
   supplier_id: number;
@@ -26,6 +26,7 @@ export default function Suppliers() {
   });
   
   const { user } = useAuth();
+  useTheme();
   const userRole = user?.role || 'admin';
 
   useEffect(() => {

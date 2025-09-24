@@ -1,7 +1,9 @@
 import { useState, useEffect } from "react";
 import { useWebSocket } from '../context/WebSocketContext';
 import { useAuth } from '../context/AuthContext';
+import { useTheme } from '../context/ThemeContext';
 import FileUpload from '../components/FileUpload';
+import DownloadDropdown from '../components/DownloadDropdown';
 import { logActivity } from '../utils/activityLogger';
 import { formatCurrency } from '../utils/currency';
 import * as XLSX from 'xlsx';
@@ -57,6 +59,7 @@ export default function Orders() {
 
   const { lastMessage } = useWebSocket();
   const { user } = useAuth();
+  useTheme();
   const userRole = user?.role || 'admin';
 
   useEffect(() => {
@@ -260,8 +263,10 @@ export default function Orders() {
 
     // Special handling for orderId to sort numerically
     if (sortKey === 'orderId') {
-      const aNum = parseInt(aValue.replace('ORD', ''));
-      const bNum = parseInt(bValue.replace('ORD', ''));
+      const aStr = typeof aValue === 'string' ? aValue : String(aValue ?? '');
+      const bStr = typeof bValue === 'string' ? bValue : String(bValue ?? '');
+      const aNum = parseInt(aStr.replace('ORD', '')) || 0;
+      const bNum = parseInt(bStr.replace('ORD', '')) || 0;
       return sortOrder === 'asc' ? aNum - bNum : bNum - aNum;
     }
     
@@ -465,7 +470,7 @@ export default function Orders() {
   if (loading) {
     return (
       <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-6">Orders</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-gray-900 dark:text-white">Orders</h1>
         <div className="flex justify-center items-center h-64">
           <div className="text-lg">Loading orders...</div>
         </div>
@@ -474,8 +479,8 @@ export default function Orders() {
   }
 
   return (
-    <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-white">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-6">Orders</h1>
+    <div className="p-4 sm:p-6 md:p-8 min-h-screen bg-light-pink dark:bg-gray-900 text-gray-900 dark:text-white">
+      <h1 className="text-2xl sm:text-3xl font-bold mb-6 text-gray-900 dark:text-white">Orders</h1>
 
       <div className="flex flex-col sm:flex-row justify-between items-center mb-6 space-y-4 sm:space-y-0 sm:space-x-4">
         <input
@@ -538,26 +543,11 @@ export default function Orders() {
           </div>
           
           <div className="mt-4 space-y-2">
-            <div className="space-y-2">
-              <button
-                onClick={handleDownloadCSV}
-                className="p-2 bg-green-500 text-white rounded-md hover:bg-green-600 transition-colors w-full"
-              >
-                Download CSV
-              </button>
-              <button
-                onClick={handleDownloadExcel}
-                className="p-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 transition-colors w-full"
-              >
-                Download Excel
-              </button>
-              <button
-                onClick={handleDownloadPDF}
-                className="p-2 bg-red-500 text-white rounded-md hover:bg-red-600 transition-colors w-full"
-              >
-                Download PDF
-              </button>
-            </div>
+            <DownloadDropdown
+              onDownloadCSV={handleDownloadCSV}
+              onDownloadExcel={handleDownloadExcel}
+              onDownloadPDF={handleDownloadPDF}
+            />
             
             <button
               onClick={() => setShowAddOrderModal(true)}
@@ -570,7 +560,7 @@ export default function Orders() {
         </div>
       )}
 
-      <div className="overflow-x-auto bg-white dark:bg-gray-800 rounded-lg shadow">
+      <div className="overflow-x-auto bg-light-pink-100 dark:bg-gray-800 rounded-lg shadow">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
@@ -586,7 +576,7 @@ export default function Orders() {
               <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+          <tbody className="bg-light-pink-100 dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
             {sortedOrders.length === 0 ? (
               <tr>
                 <td colSpan={10} className="px-6 py-4 text-center text-gray-500 dark:text-gray-400">

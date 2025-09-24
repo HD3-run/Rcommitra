@@ -2,10 +2,12 @@ import { Router, Request, Response } from 'express';
 import { createUser, findUserByEmail, verifyPassword } from './user.model.ts';
 import { logger } from './utils/logger.ts';
 import { pool } from './db.ts';
+import { createPhantomTokenPair } from './utils/jwt.ts';
 import ordersRouter from './orders.ts';
 import inventoryRouter from './inventory.ts';
 import reportsRouter from './reports.ts';
 import invoicesRouter from './invoices.ts';
+import { authenticateUser } from './middleware/auth.ts';
 
 declare module 'express-session' {
   interface SessionData {
@@ -71,11 +73,20 @@ router.post('/login', async (req: Request, res: Response) => {
 
     logger.info('User logged in successfully', { userId: user.user_id });
     req.session.userId = user.user_id;
+    
+    // Create phantom token pair for enhanced security
+    const { phantomToken } = createPhantomTokenPair({
+      userId: user.user_id,
+      role: user.role,
+      merchant_id: user.merchant_id
+    });
+    
     return res.status(200).json({ 
       message: 'Logged in successfully', 
       userId: user.user_id, 
       username: user.username,
-      role: user.role
+      role: user.role,
+      token: phantomToken // Send phantom token to client
     });
   } catch (error) {
     logger.error('Login error', error instanceof Error ? error.message : String(error));
@@ -105,24 +116,81 @@ router.get('/protected', (req: Request, res: Response) => {
 
 export function registerRoutes(app: Router) {
   // Authentication middleware
-  const requireAuth = (req: Request, res: Response, next: any) => {
-    if (!req.session.userId) {
-      return res.status(401).json({ message: 'Authentication required' });
-    }
-    next();
-  };
+  // Removed requireAuth as authenticateUser handles authentication and populates req.user
+  
+  // Add session debugging middleware for development
+  if (process.env.NODE_ENV === 'development') {
+    app.use('/api', (req, res, next) => {
+      logger.info('API Request Debug', {
+        path: req.path,
+        method: req.method,
+        sessionId: req.sessionID,
+        userId: (req as any).session?.userId,
+        userIdType: typeof (req as any).session?.userId,
+        hasSession: !!(req as any).session,
+        cookies: req.headers.cookie ? 'present' : 'none'
+      });
+      next();
+    });
+  }
   
   // Register route modules
   app.use('/api/auth', router);
-  app.use('/api/orders', requireAuth, ordersRouter);
-  app.use('/api/inventory', requireAuth, inventoryRouter);
-  app.use('/api/reports', requireAuth, reportsRouter);
-  app.use('/api/invoices', requireAuth, invoicesRouter);
+  app.use('/api/orders', authenticateUser, ordersRouter);
+  app.use('/api/inventory', authenticateUser, inventoryRouter);
+  app.use('/api/reports', authenticateUser, reportsRouter);
+  app.use('/api/invoices', authenticateUser, invoicesRouter);
+  
+  // Add debug endpoint for development
+  if (process.env.NODE_ENV === 'development') {
+    app.get('/api/debug/verify-user-data', async (req: Request, res: Response) => {
+      const client = await pool.connect();
+      try {
+        // Check for specific user 'mya' and their assignments
+        const mayaUser = await client.query(
+          'SELECT user_id, merchant_id, username, role FROM oms.users WHERE username = $1',
+          ['mya']
+        );
+        
+        if (mayaUser.rows.length === 0) {
+          return res.json({ message: 'User mya not found', sessionUserId: (req as any).session?.userId });
+        }
+        
+        const mayaId = mayaUser.rows[0].user_id;
+        const merchantId = mayaUser.rows[0].merchant_id;
+        
+        // Get mya's assigned orders
+        const mayaOrders = await client.query(
+          'SELECT o.order_id, o.order_source, o.total_amount, o.status, o.created_at, c.name as customer_name FROM oms.orders o LEFT JOIN oms.customers c ON o.customer_id = c.customer_id WHERE o.user_id = $1',
+          [mayaId]
+        );
+        
+        // Check current session user
+        const currentUserId = (req as any).session?.userId;
+        const isCurrentUserMaya = currentUserId && (parseInt(currentUserId) === mayaId || currentUserId === mayaId.toString());
+        
+        res.json({
+          mayaUser: mayaUser.rows[0],
+          mayaOrders: mayaOrders.rows,
+          currentSessionUserId: currentUserId,
+          currentUserIdType: typeof currentUserId,
+          isCurrentUserMaya,
+          sessionExists: !!(req as any).session,
+          sessionId: req.sessionID
+        });
+      } catch (error) {
+        logger.error('Error verifying user data', error instanceof Error ? error.message : String(error));
+        res.status(500).json({ message: 'Failed to verify user data' });
+      } finally {
+        client.release();
+      }
+    });
+  }
   
 
   
   // Profile management endpoints
-  app.get('/api/profile', requireAuth, async (req: Request, res: Response) => {
+  app.get('/api/profile', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const result = await client.query(
@@ -148,7 +216,7 @@ export function registerRoutes(app: Router) {
     }
   });
   
-  app.put('/api/profile', requireAuth, async (req: Request, res: Response) => {
+  app.put('/api/profile', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const { name, email, phone } = req.body;
@@ -194,7 +262,7 @@ export function registerRoutes(app: Router) {
     }
   });
   
-  app.put('/api/profile/password', requireAuth, async (req: Request, res: Response) => {
+  app.put('/api/profile/password', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const { currentPassword, newPassword } = req.body;
@@ -237,7 +305,7 @@ export function registerRoutes(app: Router) {
   });
   
   // User management endpoints (Admin only)
-  app.get('/api/users', requireAuth, async (req: Request, res: Response) => {
+  app.get('/api/users', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const currentUserResult = await client.query(
@@ -265,7 +333,7 @@ export function registerRoutes(app: Router) {
     }
   });
   
-  app.post('/api/users', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/users', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const { username, email, phone, role, password } = req.body;
@@ -315,7 +383,7 @@ export function registerRoutes(app: Router) {
     }
   });
   
-  app.put('/api/users/:userId/role', requireAuth, async (req: Request, res: Response) => {
+  app.put('/api/users/:userId/role', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const { userId } = req.params;
@@ -353,7 +421,7 @@ export function registerRoutes(app: Router) {
     }
   });
   
-  app.delete('/api/users/:userId', requireAuth, async (req: Request, res: Response) => {
+  app.delete('/api/users/:userId', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const { userId } = req.params;
@@ -396,7 +464,7 @@ export function registerRoutes(app: Router) {
   });
   
   // Order assignment endpoints - using order_status_history for tracking
-  app.post('/api/orders/assign', requireAuth, async (req: Request, res: Response) => {
+  app.post('/api/orders/assign', async (req: Request, res: Response) => {
     logger.info('Order assignment request', { body: req.body, userId: req.session.userId });
     
     const client = await pool.connect();
@@ -495,7 +563,7 @@ export function registerRoutes(app: Router) {
   });
   
   // Employee endpoints - using actual schema
-  app.get('/api/employee/assigned-orders', requireAuth, async (req: Request, res: Response) => {
+  app.get('/api/employee/assigned-orders', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const result = await client.query(`
@@ -516,7 +584,7 @@ export function registerRoutes(app: Router) {
     }
   });
   
-  app.get('/api/employee/orders', requireAuth, async (req: Request, res: Response) => {
+  app.get('/api/employee/orders', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const result = await client.query(`
@@ -537,7 +605,7 @@ export function registerRoutes(app: Router) {
     }
   });
   
-  app.put('/api/employee/orders/:orderId/status', requireAuth, async (req: Request, res: Response) => {
+  app.put('/api/employee/orders/:orderId/status', async (req: Request, res: Response) => {
     const client = await pool.connect();
     try {
       const { orderId } = req.params;

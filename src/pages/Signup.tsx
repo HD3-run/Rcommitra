@@ -1,10 +1,8 @@
 import { useState } from 'react';
 import { useLocation } from 'wouter';
-import { useAuth } from '../context/AuthContext';
 
 export default function Signup() {
   const [, setLocation] = useLocation();
-  const { login } = useAuth(); // Assuming login is also used after signup
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -42,8 +40,8 @@ export default function Signup() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
-      <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-sm">
+    <div className="min-h-screen flex items-center justify-center bg-light-pink dark:bg-gray-900">
+      <div className="bg-light-pink-100 dark:bg-gray-800 p-8 rounded-lg shadow-md w-full max-w-sm">
         <h2 className="text-2xl font-bold text-center text-gray-900 dark:text-white mb-6">Sign Up</h2>
         <form onSubmit={handleSignup} className="space-y-4">
           <div>

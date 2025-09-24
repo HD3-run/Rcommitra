@@ -7,6 +7,9 @@ import express, { type Request, Response, NextFunction } from "express";
 import cors from 'cors';
 
 import { logger } from './utils/logger.js';
+import { sanitizeInput, preventUrlManipulation } from './middleware/validation.js';
+import { apiLimiter, authLimiter, uploadLimiter, orderLimiter } from './middleware/rate-limit.js';
+import { selectFields, compressResponse } from './utils/response-optimizer.js';
 
 
 
@@ -44,14 +47,16 @@ app.use('/api', (_req, res, next) => {
 
 // Enhanced CORS configuration
 const corsOptions = {
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:5001',
-    'http://127.0.0.1:3000',
-    'http://127.0.0.1:5173',
-    'http://127.0.0.1:5000'
-  ],
+  origin: isProd ? 
+    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : []) :
+    [
+      'http://localhost:3000',
+      'http://localhost:5173',
+      'http://localhost:5001',
+      'http://127.0.0.1:3000',
+      'http://127.0.0.1:5173',
+      'http://127.0.0.1:5000'
+    ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: [
@@ -77,13 +82,20 @@ app.use(cookieParser());
 
 
 
+// Validate session secret in production
+if (isProd && (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'your-session-secret-change-in-production')) {
+  logger.error('SESSION_SECRET must be set to a secure value in production');
+  process.exit(1);
+}
+
 // Simple session configuration
 app.use(session({
   secret: process.env.SESSION_SECRET || 'your-session-secret-change-in-production',
   resave: false,
   saveUninitialized: false,
+  name: 'sessionId',
   cookie: {
-    secure: false,
+    secure: false, // Set to false for development
     httpOnly: true,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax'
@@ -102,6 +114,20 @@ app.use(compression({
   threshold: 1024
 }));
 
+// Security middleware (before rate limiting)
+app.use(preventUrlManipulation);
+app.use(sanitizeInput);
+
+// Rate limiting
+app.use('/api/', apiLimiter);
+app.use('/api/auth/', authLimiter);
+app.use('/api/*/upload*', uploadLimiter);
+app.use('/api/orders', orderLimiter);
+
+// Response optimization
+app.use(selectFields);
+app.use(compressResponse);
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({
@@ -110,10 +136,10 @@ app.use(express.urlencoded({
 }));
 
 // Configure multer for file uploads with security limits
-multer({
+const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 8 * 1024 * 1024, // 8MB limit as recommended
+    fileSize: parseInt(process.env.MAX_FILE_SIZE || '8388608'), // 8MB default
     files: 1,
     fieldSize: 1024 * 1024, // 1MB field size limit
   },
@@ -127,6 +153,19 @@ multer({
     }
   }
 });
+
+// Export upload middleware for use in routes
+export { upload };
+
+// HTTPS enforcement in production
+if (isProd) {
+  app.use((req, res, next) => {
+    if (req.header('x-forwarded-proto') !== 'https') {
+      return res.redirect(`https://${req.header('host')}${req.url}`);
+    }
+    next();
+  });
+}
 
 // Security headers
 app.use((_req, res, next) => {
@@ -150,44 +189,47 @@ app.use((_req, res, next) => {
 
 
 
-app.get('/api/picks', (_req, res) => {
-  const mockPicks = [
-    {
-      id: 'PK-2024-001',
-      items: 12,
-      location: 'Warehouse A',
-      status: 'completed',
-      time: '2024-01-01T10:00:00Z'
-    },
-    {
-      id: 'PK-2024-002',
-      items: 8,
-      location: 'Warehouse B',
-      status: 'in-progress',
-      time: '2024-01-01T11:30:00Z'
-    }
-  ];
-  
-  res.json(mockPicks);
-});
+// Mock endpoints - only available in development
+if (process.env.NODE_ENV === 'development') {
+  app.get('/api/picks', (_req, res) => {
+    const mockPicks = [
+      {
+        id: 'PK-2024-001',
+        items: 12,
+        location: 'Warehouse A',
+        status: 'completed',
+        time: '2024-01-01T10:00:00Z'
+      },
+      {
+        id: 'PK-2024-002',
+        items: 8,
+        location: 'Warehouse B',
+        status: 'in-progress',
+        time: '2024-01-01T11:30:00Z'
+      }
+    ];
+    
+    res.json(mockPicks);
+  });
 
-// Mock activities endpoint
-app.get('/api/activities/recent', (_req, res) => {
-  const mockActivities = [
-    {
-      action: 'Pick list PK-2024-001 completed',
-      time: '2 minutes ago',
-      color: 'text-green-400'
-    },
-    {
-      action: 'New order received from Flipkart',
-      time: '5 minutes ago',
-      color: 'text-blue-400'
-    }
-  ];
-  
-  res.json(mockActivities);
-});
+  // Mock activities endpoint
+  app.get('/api/activities/recent', (_req, res) => {
+    const mockActivities = [
+      {
+        action: 'Pick list PK-2024-001 completed',
+        time: '2 minutes ago',
+        color: 'text-green-400'
+      },
+      {
+        action: 'New order received from Flipkart',
+        time: '5 minutes ago',
+        color: 'text-blue-400'
+      }
+    ];
+    
+    res.json(mockActivities);
+  });
+}
 
 // Try to register full routes if available
 async function setupRoutes() {

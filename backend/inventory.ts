@@ -1,6 +1,11 @@
 import { Router, Request, Response } from 'express';
 import { pool } from './db.ts';
 import { logger } from './utils/logger.ts';
+import { validateProduct } from './utils/validation.ts';
+import { validatePagination, validateQuantity } from './middleware/validation.ts';
+import { generateUniqueSku } from './utils/sku.ts';
+ 
+import { cacheMiddleware, invalidateCache } from './middleware/cache.ts';
 import multer from 'multer';
 import csv from 'csv-parser';
 import { Readable } from 'stream';
@@ -10,11 +15,12 @@ const upload = multer({ storage: multer.memoryStorage() });
 const router = Router();
 
 // Get all products with pagination and filtering
-router.get('/', async (req: Request, res: Response) => {
+router.get('/', validatePagination, cacheMiddleware(60), async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const { page = 1, limit = 10, category, search, lowStock } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
+    const limitNum = Math.min(Number(limit), 100); // Cap at 100
     
     const userResult = await client.query(
       'SELECT merchant_id FROM oms.users WHERE user_id = $1',
@@ -27,12 +33,14 @@ router.get('/', async (req: Request, res: Response) => {
     
     const merchantId = userResult.rows[0].merchant_id;
     
+    // Optimized query with proper joins and indexes
     let query = `
-      SELECT p.*, i.quantity_available, i.reorder_level, i.cost_price as unit_price,
-             COUNT(*) OVER() as total_count,
-             CASE WHEN i.quantity_available <= i.reorder_level THEN true ELSE false END as is_low_stock
+      SELECT p.product_id, p.product_name, p.sku, p.description, p.category, p.created_at,
+             i.quantity_available, i.reorder_level, i.cost_price as unit_price,
+             (i.quantity_available <= i.reorder_level) as is_low_stock,
+             COUNT(*) OVER() as total_count
       FROM oms.products p 
-      LEFT JOIN oms.inventory i ON p.product_id = i.product_id
+      INNER JOIN oms.inventory i ON p.product_id = i.product_id
       WHERE p.merchant_id = $1
     `;
     const params: any[] = [merchantId];
@@ -45,17 +53,17 @@ router.get('/', async (req: Request, res: Response) => {
     }
 
     if (search) {
-      query += ` AND (p.product_name ILIKE $${paramIndex} OR p.sku ILIKE $${paramIndex})`;
-      params.push(`%${search}%`);
-      paramIndex++;
+      query += ` AND (p.product_name ILIKE $${paramIndex} OR p.sku = $${paramIndex + 1})`;
+      params.push(`%${search}%`, search);
+      paramIndex += 2;
     }
 
     if (lowStock === 'true') {
       query += ` AND i.quantity_available <= i.reorder_level`;
     }
 
-    query += ` ORDER BY p.created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
-    params.push(Number(limit), offset);
+    query += ` ORDER BY p.product_id DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    params.push(limitNum, offset);
 
     const result = await client.query(query, params);
     
@@ -63,9 +71,9 @@ router.get('/', async (req: Request, res: Response) => {
       products: result.rows,
       pagination: {
         page: Number(page),
-        limit: Number(limit),
+        limit: limitNum,
         total: result.rows[0]?.total_count || 0,
-        totalPages: Math.ceil((result.rows[0]?.total_count || 0) / Number(limit))
+        totalPages: Math.ceil((result.rows[0]?.total_count || 0) / limitNum)
       }
     });
   } catch (error) {
@@ -82,6 +90,15 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const { name, sku, description, category } = req.body;
     
+    // Validate input
+    const validation = validateProduct({ name, sku, description, category });
+    if (!validation.isValid) {
+      return res.status(400).json({ 
+        message: 'Validation failed', 
+        errors: validation.errors 
+      });
+    }
+    
     const userResult = await client.query(
       'SELECT merchant_id FROM oms.users WHERE user_id = $1',
       [(req as any).session.userId]
@@ -92,6 +109,17 @@ router.post('/', async (req: Request, res: Response) => {
     }
     
     const merchantId = userResult.rows[0].merchant_id;
+    
+    // Check for duplicate SKU within merchant
+    if (sku) {
+      const existingSku = await client.query(
+        'SELECT product_id FROM oms.products WHERE merchant_id = $1 AND sku = $2',
+        [merchantId, sku]
+      );
+      if (existingSku.rows.length > 0) {
+        return res.status(409).json({ message: 'SKU already exists for this merchant' });
+      }
+    }
 
     const result = await client.query(`
       INSERT INTO oms.products (merchant_id, product_name, sku, description, category)
@@ -99,10 +127,19 @@ router.post('/', async (req: Request, res: Response) => {
       RETURNING *
     `, [merchantId, name, sku, description, category]);
 
-    res.status(201).json(result.rows[0]);
+    // Invalidate cache after creating product
+    invalidateCache('/api/inventory');
+    
+    res.status(201).json({
+      message: 'Product created successfully',
+      product: result.rows[0]
+    });
   } catch (error) {
     logger.error('Error creating product', error instanceof Error ? error.message : String(error));
-    res.status(500).json({ message: 'Failed to create product' });
+    res.status(500).json({ 
+      message: 'Failed to create product',
+      error: process.env.NODE_ENV === 'development' ? error instanceof Error ? error.message : String(error) : undefined
+    });
   } finally {
     client.release();
   }
@@ -147,7 +184,7 @@ router.put('/:id', async (req: Request, res: Response) => {
 });
 
 // Get low stock products
-router.get('/low-stock', async (req: Request, res: Response) => {
+router.get('/low-stock', cacheMiddleware(30), async (req: Request, res: Response) => {
   const client = await pool.connect();
   try {
     const userResult = await client.query(
@@ -299,8 +336,8 @@ router.post('/upload-csv', upload.single('file'), async (req: Request, res: Resp
       try {
         logger.info('Processing product from CSV', { productData });
         
-        // Auto-generate SKU
-        const sku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+        // Auto-generate unique SKU
+        const sku = await generateUniqueSku(merchantId);
         logger.info('Generated SKU for CSV product', { sku, productName: productData.name });
         
         // Create product
@@ -398,7 +435,7 @@ router.patch('/:id/price', async (req: Request, res: Response) => {
 });
 
 // Add single product with inventory
-router.post('/add-product', async (req: Request, res: Response) => {
+router.post('/add-product', validateQuantity, async (req: Request, res: Response) => {
   logger.info('POST /api/inventory/add-product - Request received', { 
     body: req.body, 
     userId: (req as any).session?.userId,
@@ -434,8 +471,8 @@ router.post('/add-product', async (req: Request, res: Response) => {
     await client.query('BEGIN');
     logger.info('Transaction started');
     
-    // Auto-generate SKU
-    const sku = `SKU-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    // Auto-generate unique SKU
+    const sku = await generateUniqueSku(merchantId);
     logger.info('Generated SKU', { sku });
     
     // Create product
@@ -458,6 +495,9 @@ router.post('/add-product', async (req: Request, res: Response) => {
     await client.query('COMMIT');
     logger.info('Transaction committed successfully');
     logger.info('Manual product addition completed - inventory should be refreshed');
+    
+    // Invalidate cache after adding product
+    invalidateCache('/api/inventory');
     
     res.json({ message: 'Product added successfully', productId });
   } catch (error) {
